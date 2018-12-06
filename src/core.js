@@ -1080,7 +1080,13 @@ const _makeWindow = (options = {}, parent = null, top = null) => {
       super(parts && parts.map(part => utils._normalizePrototype(part, global)), opts);
     }
   })(Blob);
-  window.FormData = FormData;
+  window.FormData = (Old => class FormData extends Old {
+    append(field, value, options) {
+      super.append(field, utils._normalizePrototype(value, global), options);
+      url = _normalizeUrl(url);
+      return super.open(method, url, async, username, password);
+      }
+  })(window.FormData);
   window.XMLHttpRequest = (Old => {
     class XMLHttpRequest extends Old {
       open(method, url, async, username, password) {
