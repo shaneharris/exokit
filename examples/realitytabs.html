@@ -1034,12 +1034,20 @@ window.addEventListener('keydown', e => {
       }
     }
   } else {
-    if (focusedTab && focusedTab.iframe) {
-      focusedTab.iframe.sendKeyDown(e.which, {
-        shiftKey: e.shiftKey,
-        ctrlKey: e.ctrlKey,
-        altKey: e.altKey,
-      });
+    if (focusedTab) {
+      if (focusedTab.iframe) {
+        focusedTab.iframe.sendKeyDown(e.which, {
+          shiftKey: e.shiftKey,
+          ctrlKey: e.ctrlKey,
+          altKey: e.altKey,
+        });
+      } else if (focusedTab === rig.mesh.urlMesh) {
+        console.log('keydown', e.which, {
+          shiftKey: e.shiftKey,
+          ctrlKey: e.ctrlKey,
+          altKey: e.altKey,
+        });
+      }
     }
   }
 });
@@ -1087,12 +1095,20 @@ window.addEventListener('keyup', e => {
 });
 window.addEventListener('keypress', e => {
   if (!window.document.pointerLockElement) {
-    if (focusedTab && focusedTab.iframe) {
-      focusedTab.iframe.sendKeyPress(e.which, {
-        shiftKey: e.shiftKey,
-        ctrlKey: e.ctrlKey,
-        altKey: e.altKey,
-      });
+    if (focusedTab) {
+      if (focusedTab.iframe) {
+        focusedTab.iframe.sendKeyPress(e.which, {
+          shiftKey: e.shiftKey,
+          ctrlKey: e.ctrlKey,
+          altKey: e.altKey,
+        });
+      } else if (focusedTab === rig.mesh.urlMesh) {
+        console.log('keypress', e.which, {
+          shiftKey: e.shiftKey,
+          ctrlKey: e.ctrlKey,
+          altKey: e.altKey,
+        });
+      }
     }
   }
 });
