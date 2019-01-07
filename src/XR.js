@@ -155,10 +155,10 @@ class XRSession extends EventTarget {
       return result;
     }
   }
-  requestHitTest(ray, coordinateSystem) {
+  requestHitTest(origin, direction, coordinateSystem) {
     return new Promise((accept, reject) => {
       if (this.device.onrequesthittest)  {
-        this.device.onrequesthittest(ray, coordinateSystem, result => {
+        this.device.onrequesthittest(origin, direction, result => {
           accept(result);
         });
       } else {
@@ -387,8 +387,7 @@ class XRPresentationFrame {
       if (xrOffset) {
         localMatrix
           .premultiply(
-            localMatrix2.fromArray(xrOffset.matrix)
-            .getInverse(localMatrix2)
+            localMatrix2.fromArray(xrOffset.matrixInverse)
           );
       }
     }
