@@ -27,20 +27,36 @@ const links = [
     url: 'planes_ml.html',
   },
   {
-    name: 'Minimap',
-    url: 'minimap_ml.html',
+    name: 'Paint',
+    url: 'paint_ml.html',
   },
   {
-    name: 'Shooter',
-    url: 'shooter_ml.html',
+    name: 'Graffiti',
+    url: 'graffiti_ml.html',
   },
   {
     name: 'Hands',
     url: 'hands_ml.html',
   },
   {
+    name: 'Minimap',
+    url: 'minimap_ml.html',
+  },
+  {
+    name: 'Avatar',
+    url: 'avatar_ml.html',
+  },
+  {
+    name: 'Shooter',
+    url: 'shooter_ml.html',
+  },
+  {
     name: 'Sword',
     url: 'sword_ml.html',
+  },
+  {
+    name: 'Bow',
+    url: 'bow_ml.html',
   },
   {
     name: 'Pathfinding',
@@ -2110,6 +2126,11 @@ if (navigator.xr && !query.fake) {
         renderer.vr.enabled = true;
         renderer.vr.setDevice(display);
         renderer.vr.setAnimationLoop(animate);
+
+        if (window.browser && window.browser.magicleap) {
+          window.browser.magicleap.RequestDepthPopulation(true);
+          renderer.autoClearDepth = false;
+        }
 
         _openUrl('exobot.html');
         _updateRigLists();

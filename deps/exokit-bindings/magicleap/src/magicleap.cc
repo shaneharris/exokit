@@ -67,6 +67,7 @@ MLHandTrackingKeyPose lastKeyposeLeft = MLHandTrackingKeyPose_NoHand;
 MLHandTrackingKeyPose lastKeyposeRight = MLHandTrackingKeyPose_NoHand;
 MLHandTrackingStaticData handStaticData;
 std::vector<MLHandTracker *> handTrackers;
+bool handPresents[2];
 float wristBones[2][4][1 + 3];
 float fingerBones[2][5][4][1 + 3];
 
@@ -302,7 +303,7 @@ static void onUnloadResources(void* application_context) {
   uv_async_send(&eventsAsync);
 }
 
-MLMat4f getWindowTransformMatrix(Local<Object> windowObj) {
+MLMat4f getWindowTransformMatrix(Local<Object> windowObj, bool inverse = true) {
   Local<Object> localDocumentObj = Local<Object>::Cast(windowObj->Get(JS_STR("document")));
   Local<Value> xrOffsetValue = localDocumentObj->Get(JS_STR("xrOffset"));
 
@@ -322,9 +323,13 @@ MLMat4f getWindowTransformMatrix(Local<Object> windowObj) {
     MLVec3f scale;
     memcpy(scale.values, (char *)scaleFloat32Array->Buffer()->GetContents().Data() + scaleFloat32Array->ByteOffset(), sizeof(scale.values));
 
-    return invertMatrix(composeMatrix(position, orientation, scale));
+    MLMat4f result = composeMatrix(position, orientation, scale);
+    if (inverse) {
+      result = invertMatrix(result);
+    }
+    return result;
   } else {
-    return makeTranslationMatrix(MLVec3f{0, -largestFloorY, 0});
+    return makeTranslationMatrix(MLVec3f{0, largestFloorY * (inverse ? -1 : 1), 0});
   }
 }
 
@@ -396,7 +401,25 @@ bool MLRaycaster::Update() {
     return false;
   } else {
     ML_LOG(Error, "%s: Raycast request failed! %x", application_name, result);
-    delete this;
+    
+    Local<Object> localWindowObj = Nan::New(this->windowObj);
+
+    polls.push_back(new MLPoll(localWindowObj, [this]() -> void {
+      if (!this->cb.IsEmpty()) {
+        Local<Object> asyncObject = Nan::New<Object>();
+        AsyncResource asyncResource(Isolate::GetCurrent(), asyncObject, "MLRaycaster::Update");
+
+        Local<Function> cb = Nan::New(this->cb);
+        
+        Local<Value> argv[] = {
+          Nan::New<Array>(0),
+        };
+        asyncResource.MakeCallback(cb, sizeof(argv)/sizeof(argv[0]), argv);
+      }
+      
+      delete this;
+    }));
+
     return true;
   }
 }
@@ -972,7 +995,7 @@ void MLHandTracker::Update() {
   MLHandTrackingKeyPose keyposeRight;
   bool keyposeRightNew;
 
-  leftHandBoneValid = getHandBone(wristBones[0], fingerBones[0]);
+  leftHandBoneValid = handPresents[0] && getHandBone(wristBones[0], fingerBones[0]);
   if (leftHandBoneValid) {
     leftHandTransformValid = getHandTransform(leftHandCenter, leftHandNormal, wristBones[0], fingerBones[0], true, transformMatrix);
     leftPointerTransformValid = getHandPointerTransform(leftPointerTransform, wristBones[0], fingerBones[0], leftHandNormal, transformMatrix);
@@ -1011,7 +1034,7 @@ void MLHandTracker::Update() {
     lastKeyposeLeft = handData.left_hand_state.keypose;
   }
 
-  rightHandBoneValid = getHandBone(wristBones[1], fingerBones[1]);
+  rightHandBoneValid = handPresents[1] && getHandBone(wristBones[1], fingerBones[1]);
   if (rightHandBoneValid) {
     rightHandTransformValid = getHandTransform(rightHandCenter, rightHandNormal, wristBones[1], fingerBones[1], false, transformMatrix);
     rightPointerTransformValid = getHandPointerTransform(rightPointerTransform, wristBones[1], fingerBones[1], rightHandNormal, transformMatrix);
@@ -3051,8 +3074,6 @@ NAN_METHOD(MLContext::RequestHitTest) {
     Local<Float32Array> directionFloat32Array = Local<Float32Array>::Cast(info[1]);
     Local<Function> cb = Local<Function>::Cast(info[2]);
     Local<Object> windowObj = Local<Object>::Cast(info[3]);
-    
-    // XXX transform from child to parent
 
     memcpy(raycastQuery.position.values, (char *)originFloat32Array->Buffer()->GetContents().Data() + originFloat32Array->ByteOffset(), sizeof(raycastQuery.position.values));
     memcpy(raycastQuery.direction.values, (char *)directionFloat32Array->Buffer()->GetContents().Data() + directionFloat32Array->ByteOffset(), sizeof(raycastQuery.direction.values));
@@ -3061,6 +3082,17 @@ NAN_METHOD(MLContext::RequestHitTest) {
     raycastQuery.width = 1;
     raycastQuery.height = 1;
     raycastQuery.collide_with_unobserved = false;
+
+    MLMat4f transformMatrix = getWindowTransformMatrix(windowObj, false);
+    if (!isIdentityMatrix(transformMatrix)) {
+      MLVec3f &position = raycastQuery.position;
+      MLVec3f &direction = raycastQuery.direction;
+      MLQuaternionf rotation = getQuaternionFromUnitVectors(MLVec3f{0, 0, -1}, direction);
+      MLVec3f scale = {1, 1, 1};
+      MLMat4f transform = multiplyMatrices(transformMatrix, composeMatrix(position, rotation, scale));
+      decomposeMatrix(transform, position, rotation, scale);
+      direction = applyVectorQuaternion(MLVec3f{0, 0, -1}, rotation);
+    }
     
     MLHandle requestHandle;
     MLResult result = MLRaycastRequest(raycastTracker, &raycastQuery, &requestHandle);
@@ -3292,6 +3324,7 @@ NAN_METHOD(MLContext::Update) {
           }
         }
 
+        handPresents[0] = handData.left_hand_state.hand_confidence >= 0.5;
         // setFingerValue(handData.left_hand_state, handBones[0][0]);
         setFingerValue(handStaticData.left.wrist, snapshot, wristBones[0]);
         setFingerValue(handStaticData.left.thumb, snapshot, fingerBones[0][0]);
@@ -3300,6 +3333,7 @@ NAN_METHOD(MLContext::Update) {
         setFingerValue(handStaticData.left.ring, snapshot, fingerBones[0][3]);
         setFingerValue(handStaticData.left.pinky, snapshot, fingerBones[0][4]);
 
+        handPresents[1] = handData.right_hand_state.hand_confidence >= 0.5;
         // setFingerValue(handData.left_hand_state, handBones[1][0]);
         setFingerValue(handStaticData.right.wrist, snapshot, wristBones[1]);
         setFingerValue(handStaticData.right.thumb, snapshot, fingerBones[1][0]);

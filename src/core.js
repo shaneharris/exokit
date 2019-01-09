@@ -983,6 +983,17 @@ const _makeWindow = (options = {}, parent = null, top = null) => {
       return fakeVrDisplay;
     },
     getGamepads,
+    clipboard:{
+      read:() => Promise.resolve(), // Not implemented yet
+      readText: () => new Promise(resolve => {
+        resolve(nativeWindow.getClipboard().slice(0, 256));// why do we slice this?
+      }),
+      write:() => Promise.resolve(), // Not implemented yet
+      writeText: clipboardContents => new Promise(resolve => {
+        nativeWindow.setClipboard(clipboardContents);
+        resolve();
+      })
+    }
     /* getVRMode: () => vrMode,
     setVRMode: newVrMode => {
       for (let i = 0; i < vrDisplays.length; i++) {
@@ -1140,7 +1151,11 @@ const _makeWindow = (options = {}, parent = null, top = null) => {
       super(parts && parts.map(part => utils._normalizePrototype(part, global)), opts);
     }
   })(Blob);
-  window.FormData = FormData;
+  window.FormData = (Old => class FormData extends Old {
+    append(field, value, options) {
+      super.append(field, utils._normalizePrototype(value, global), options);
+    }
+  })(FormData);
   window.XMLHttpRequest = (Old => {
     class XMLHttpRequest extends Old {
       open(method, url, async, username, password) {
@@ -1360,7 +1375,7 @@ const _makeWindow = (options = {}, parent = null, top = null) => {
       RequestHandTracking: () => nativeMl.RequestHandTracking(window),
       RequestEyeTracking: () => nativeMl.RequestEyeTracking(window),
       RequestImageTracking: () => nativeMl.RequestImageTracking(window),
-      RequestDepthPopulation: () => nativeMl.RequestDepthPopulation(window),
+      RequestDepthPopulation: nativeMl.RequestDepthPopulation,
       RequestCamera(cb) {
         if (typeof cb === 'function') {
           cb = (cb => function(datas) {
